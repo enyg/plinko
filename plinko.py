@@ -10,6 +10,9 @@ cap = cv2.VideoCapture(0)
 
 command = "h"
 
+def plinko_master():
+	pass
+
 if(cap.isOpened() == False):
 	print("Error opening video file stream ior file")
 
@@ -26,3 +29,4 @@ while(cap.isOpened()):
 	elif key == ord('i'):
 		command = input("Enter Command")
 		ser.write((command +"\n").encode())
+
