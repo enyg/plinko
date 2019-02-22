@@ -1,4 +1,5 @@
-
+# Group 3 plinko project
+# ECEn 631 winter 2019
 import serial
 import cv2
 
