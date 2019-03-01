@@ -2,6 +2,7 @@
 # ECEn 631 winter 2019
 import serial
 import cv2
+import numpy as np
 
 
 class Bot:
@@ -19,16 +20,83 @@ class Bot:
         self.basketYPos = 60.0  # dummy value - needs to be measured or set in calibration
 
         # initialize plinko board geometry here
-        # (find edges, calculate pixels/cm, and calculate perspective transform, if necessary)
+        self.calibrate()
+        
         self.cmPerPx = 3.0  # dummy value
 
         # rough guess for avg velocity in cm/sec - should be measured or estimated from video
         self.avgVel = 3.0
-
+        
+        
+    
+    def calibrate(self):
+        # (find edges, calculate pixels/cm, and calculate perspective transform, if necessary)
+        # get bounding box for ROI
+        cv2.namedWindow("Calibration", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Calibration", 720, 480)
+        cv2.setMouseCallback("Calibration", self.getCalibVerts)
+        
+        self.calibVerts = np.zeros([4,2], dtype="float32")
+        self.vertIx = 0
+        
+        # display live feed while user clicks on points
+        while True:
+            success, self.calframe = cap.read()
+            if not success:
+                break
+                
+            # draw calibration vertices:
+            for pt in self.calibVerts:
+                if not all(pt == [0,0]):
+                    cv2.circle(self.calframe, (pt[0],pt[1]), 4, [255,255,0], 1, cv2.LINE_AA)
+            
+            cv2.imshow("Calibration", self.calframe)
+            cv2.waitKey(30)
+            
+            if self.vertIx >= 4:
+                break
+        
+        # get the transformation
+        (tl, tr, br, bl) = self.calibVerts
+        widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
+        widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
+        transW = max(int(widthA), int(widthB))
+        
+        heightA = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
+        heightB = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
+        transH = max(int(heightA), int(heightB))
+        
+        dst = np.array([
+            [0, 0],
+            [transW - 1, 0],
+            [transW - 1, transH - 1],
+            [0, transH - 1]], dtype = "float32")
+        
+        self.perspectiveTrans = cv2.getPerspectiveTransform(self.calibVerts, dst)
+        self.transW = transW
+        self.transH = transH
+        # show the flattened/cropped image
+        good = self.straighten(self.calframe)
+        cv2.imshow("Calibration",good)
+        
+        cv2.waitKey(0)
+        
+        #print(self.calibVerts)
+        
+        # get cm per px scale
+        # base it on known distance between screw holes in center of board
+        
+        # TODO: calibrate camera and undistort to make the board a true rectangle
+    
+    def getCalibVerts(self, event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            self.calibVerts[self.vertIx] = [x,y]
+            self.vertIx = self.vertIx + 1
+            print("calibration pt: ", (x,y))
+        
     def straighten(self, frame):
         # return straightened (maybe cropped) image of plinko board, based on initial calibration
-        board = frame  # dummy function
-        return board
+        return cv2.warpPerspective(frame, self.perspectiveTrans, (self.transW, self.transH))
 
     def getCurrentBallPos(self, frame):
         # calculate x and y position in pixels for each ball (R,G,B)
@@ -64,15 +132,14 @@ class Bot:
         return
 
     def run(self):
-
+        cv2.namedWindow("video", cv2.WINDOW_NORMAL)
         while self.cap.isOpened():
             success, frame = cap.read()
             if not success:
                 break
 
-            cv2.imshow("video", frame)
-
             board = self.straighten(frame)
+            cv2.imshow("video", board)
             ballPos = self.getCurrentBallPos(board)
             ballPrediction = self.estimateFinalBallPos(ballPos)
             self.controlBasket(ballPrediction)
@@ -86,7 +153,10 @@ class Bot:
                 self.ser.write((command + "\n").encode())
 
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(2)
+# 800 x 448 works with 24 fps
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 448)
 # ser = serial.Serial('COM5', 115200, timeout=5)
 ser = None
 
