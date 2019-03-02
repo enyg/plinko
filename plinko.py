@@ -179,18 +179,27 @@ class Bot:
 
     # estimate the final horizontal position and time to reach the basket height (for each ball)
     # return a value in cm for position
+    # this function translates from pixel values to cm on the basket's coordinate system
     def estimateFinalBallPos(self, currPos):
+        [[xr, yr], [xg, yg], [xb, yb]] = currPos
+        xfinal = [-1, -1, -1]
+        tfinal = [-1, -1, -1]
+        
+        for ix in range(0,3):
+            if currPos[ix][0] < 0:
+                # this ball is not present (negative position in px).
+                # Passing -1 as predictions will indicate to control function
+                # that this ball is not on the board anymore.
+                xfinal[ix] = -1
+                tfinal[ix] = -1
+            else:
+                # final x position is just set to current position (transformed)
+                xfinal[ix] = (currPos[ix][0] + self.basketOffset) * self.cmPerPx
+                # estimate final time based on avg velocity and current y position
+                tfinal[ix] = (self.basketYPos - currPos[ix][1])/self.avgVel
 
-        # use current x positions as final x positions
-        xrf = (currPos[0][0] + self.basketOffset) * self.cmPerPx
-        xgf = (currPos[1][0] + self.basketOffset) * self.cmPerPx
-        xbf = (currPos[2][0] + self.basketOffset) * self.cmPerPx
-        # estimate final time based on avg velocity and current y position
-        trf = (self.basketYPos - currPos[0][1])/self.avgVel
-        tgf = (self.basketYPos - currPos[1][1])/self.avgVel
-        tbf = (self.basketYPos - currPos[2][1])/self.avgVel
-
-        return [[xrf, trf], [xbf, tbf], [xgf, tgf]]
+        #return [[xrf, trf], [xgf, tgf], [xbf, tbf]]
+        return xfinal, tfinal
 
     def controlBasket(self, ballPrediction):
         # this function can move the basket at any time it is called,
