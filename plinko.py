@@ -15,7 +15,10 @@ class Bot:
 
         self.ser = ser
         self.home_command = 'h'
-        
+        self.pos_r = [-1,-1]  # dummy values
+        self.pos_g = [-1,-1]
+        self.pos_b = [-1,-1]
+        self.ball_radius = 0.75 * 2.54 # ball radius in cms        
         # home basket
         #ser.write((self.home_commmand + "\n").encode())
         #ser.write(("g25\n").encode())
@@ -174,13 +177,80 @@ class Bot:
 
     def getCurrentBallPos(self, frame):
         # calculate x and y position in pixels for each ball (R,G,B)
-        xr = 1  # dummy values
-        yr = 2
-        xg = 3
-        yg = 4
-        xb = 5
-        yb = 6
-        return [[xr, yr], [xg, yg], [xb, yb]]
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        h = hsv[:,:,0]
+        s = hsv[:,:,1]
+        v = hsv[:,:,2]
+
+        red_cond = ((h>=165)+(h<=15))*(s>100)* (v > 50)* (v < 200)
+        green_cond = ((h>=45)*(h<=75))*(s>100)* (v > 50) * (v < 200)
+        blue_cond = ((h>=105)*(h<=135))*(s>100)* (v > 50)* (v < 200)
+        else_cond = ~(red_cond + green_cond+ blue_cond)
+
+        frame[red_cond] = [0,0,255] # red 
+        frame[green_cond] = [0,255,0] # green
+        frame[blue_cond] = [255,0,0] # blue
+        frame[else_cond] = [0,0,0]
+
+        min_radius = int((self.ball_radius/self.cmPerPx)*0.75)
+        max_radius = int((self.ball_radius/self.cmPerPx)*1.25)
+
+        circle_red = cv2.HoughCircles(frame[:,:,2], cv2.HOUGH_GRADIENT, 1, minDist=20, param1=250, param2=8, minRadius=min_radius, maxRadius=max_radius)
+        circle_green = cv2.HoughCircles(frame[:,:,1], cv2.HOUGH_GRADIENT, 1, minDist=20, param1=250, param2=8, minRadius=min_radius, maxRadius=max_radius)
+        circle_blue = cv2.HoughCircles(frame[:,:,0], cv2.HOUGH_GRADIENT, 1, minDist=20, param1=250, param2=8, minRadius=min_radius, maxRadius=max_radius)
+
+        ysize, xsize, channels = frame.shape
+        x0 = (int)(3/self.cmPerPx)
+        x1 = (int)(60/self.cmPerPx)
+        y0 = (int)(10/self.cmPerPx)
+        y1 = (int)(30/self.cmPerPx)
+        y2 = (int)(80/self.cmPerPx)
+
+        xy_diff = (int)(5/self.cmPerPx)
+
+        if circle_red is not None:
+            for x,y,r in circle_red[0,:]:
+
+                if x0<x<x1 and y0<y<y2:
+
+                    if self.pos_r == [-1,-1] and y<y1:
+                        self.pos_r[0] = x
+                        self.pos_r[1] = y
+
+                    elif abs(self.pos_r[0]-x)<xy_diff and abs(self.pos_r[1]-y)<xy_diff:
+                        self.pos_r[0] = x
+                        self.pos_r[1] = y
+
+        if circle_green is not None:
+            for x,y,r in circle_green[0,:]:
+
+                if x0<x<x1 and y0<y<y2:
+
+                    if self.pos_g == [-1,-1] and y<y1:
+                        self.pos_g[0] = x
+                        self.pos_g[1] = y
+
+                    elif abs(self.pos_g[0]-x)<xy_diff and abs(self.pos_g[1]-y)<xy_diff:
+                        self.pos_g[0] = x
+                        self.pos_g[1] = y
+
+        if circle_blue is not None:
+            for x,y,r in circle_blue[0,:]:
+
+                if x0<x<x1 and y0<y<y2:
+
+                    if self.pos_b == [-1,-1] and y<y1:
+                        self.pos_b[0] = x
+                        self.pos_b[1] = y
+
+                    elif abs(self.pos_b[0]-x)<xy_diff and abs(self.pos_b[1]-y)<xy_diff:
+                        self.pos_b[0] = x
+                        self.pos_b[1] = y
+
+
+
+
+        return [self.pos_r, self.pos_g, self.pos_b]
 
     # estimate the final horizontal position and time to reach the basket height (for each ball)
     # return a value in cm for position
@@ -254,8 +324,8 @@ class Bot:
                 self.ser.write((command + "\n").encode())
 
 
-cap = cv2.VideoCapture(2)
-#cap = cv2.VideoCapture("sample.avi")
+#cap = cv2.VideoCapture(2)
+cap = cv2.VideoCapture("sample.avi")
 # 800 x 448 works with 24 fps
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 448)
