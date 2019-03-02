@@ -3,6 +3,7 @@
 import serial
 import cv2
 import numpy as np
+import time
 
 
 class Bot:
@@ -82,6 +83,8 @@ class Bot:
         self.perspectiveTrans = cv2.getPerspectiveTransform(self.calibVerts, dst)
         self.transW = transW
         self.transH = transH
+        
+        print("dimensions: ", transW, transH)
         
         # get cm per px scale
         # base it on known distance between screw holes in center of board
@@ -255,10 +258,12 @@ class Bot:
     # estimate the final horizontal position and time to reach the basket height (for each ball)
     # return a value in cm for position
     # this function translates from pixel values to cm on the basket's coordinate system
-    def estimateFinalBallPos(self, currPos):
+    def estimateFinalBallPos(self, currPos, img, draw):
         [[xr, yr], [xg, yg], [xb, yb]] = currPos
         xfinal = [-1, -1, -1]
         tfinal = [-1, -1, -1]
+        
+        pxPerSec = self.avgVel / self.cmPerPx
         
         for ix in range(0,3):
             if currPos[ix][0] < 0:
@@ -272,7 +277,25 @@ class Bot:
                 xfinal[ix] = (currPos[ix][0] + self.basketOffset) * self.cmPerPx
                 # estimate final time based on avg velocity and current y position
                 tfinal[ix] = (self.basketYPos - currPos[ix][1])/self.avgVel
-
+        
+        # draw predicted path on the board image (if draw = True)
+        # this part works with pixel values, not centimeters - conversion is only done for the final prediction
+        dt = self.dt    # use last delta t as assumption for frame rate
+        #drawstart = time.perf_counter()
+        if draw == True:
+            # index 0: r/g/b   index 1: x/y    index 2: time step
+            timeSteps = int(max(tfinal)/dt)
+            paths = np.zeros([3, 2, timeSteps], dtype="float32")
+            for ix in range(0,3):
+                color = (255*(ix==2), 255*(ix==1), 255*(ix==0))
+                paths[ix][0][:] = np.ones([timeSteps])*currPos[ix][0]
+                for tix in range(0, int(tfinal[ix]/dt)):
+                    paths[ix][1][tix] = currPos[ix][1]+pxPerSec*dt*tix
+                for tix in range(0, int(tfinal[ix]/dt)):                    
+                    cv2.circle(img, (paths[ix][0][tix], paths[ix][1][tix]), 4, color, cv2.FILLED)
+        #drawend = time.perf_counter()
+        #print("drawing: ", drawend-drawstart, " s")
+        
         #return [[xrf, trf], [xgf, tgf], [xbf, tbf]]
         return xfinal, tfinal
 
@@ -303,16 +326,24 @@ class Bot:
         return
 
     def run(self):
+        self.t = time.perf_counter()  # current frame time
+        self.dt = 0 # difference from last frame time
+        
         cv2.namedWindow("video", cv2.WINDOW_NORMAL)
         while self.cap.isOpened():
             success, frame = cap.read()
+            # update times
+            tnew = time.perf_counter()
+            self.dt = tnew - self.t
+            self.t = tnew
             if not success:
                 break
 
             board = self.straighten(frame)
-            cv2.imshow("video", board)
+            #cv2.imshow("video", board)
             ballPos = self.getCurrentBallPos(board)
-            xfinal, tfinal = self.estimateFinalBallPos(ballPos)
+            xfinal, tfinal = self.estimateFinalBallPos(ballPos, board, draw=True)
+            cv2.imshow("video", board)
             self.controlBasket(xfinal, tfinal)
 
             key = cv2.waitKey(10) & 0xFF
