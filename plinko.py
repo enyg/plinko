@@ -21,12 +21,12 @@ class Bot:
         self.pos_b = [-1,-1]
         self.ball_radius = 0.75 * 2.54 # ball radius in cms        
         # home basket
-        #ser.write((self.home_commmand + "\n").encode())
-        #ser.write(("g25\n").encode())
+        ser.write(('h'+ "\n").encode())
+        ser.write(("g25\n").encode())
         self.lastBasketPosition = 25
         
         # initialize plinko board geometry here
-        self.calibrateLazy()
+        self.calibrate()
 
         # rough guess for avg velocity in cm/sec - should be measured or estimated from video
         self.avgVel = 3.0
@@ -64,8 +64,9 @@ class Bot:
         
         # display live feed while user clicks on points
         while True:
-            success, self.calframe = cap.read()
+            success, self.calframe = self.cap.read()
             if not success:
+                print('not reading')
                 break
                 
             # draw calibration vertices:
@@ -153,7 +154,7 @@ class Bot:
         
         ### calibrate basket horizontal offset and height in px ###
         # move basket to known position
-        #ser.write(("g25\n").encode())
+        ser.write(("g25\n").encode())
         # user will click on top center of basket
         print("click on top center of basket")
         self.point = []
@@ -220,18 +221,18 @@ class Bot:
         min_radius = int((self.ball_radius/self.cmPerPx)*0.75)
         max_radius = int((self.ball_radius/self.cmPerPx)*1.25)
 
-        circle_red = cv2.HoughCircles(frame1[:,:,2], cv2.HOUGH_GRADIENT, 1, minDist=20, param1=250, param2=8, minRadius=min_radius, maxRadius=max_radius)
-        circle_green = cv2.HoughCircles(frame1[:,:,1], cv2.HOUGH_GRADIENT, 1, minDist=20, param1=250, param2=8, minRadius=min_radius, maxRadius=max_radius)
-        circle_blue = cv2.HoughCircles(frame1[:,:,0], cv2.HOUGH_GRADIENT, 1, minDist=20, param1=250, param2=8, minRadius=min_radius, maxRadius=max_radius)
+        circle_red = cv2.HoughCircles(frame1[:,:,2], cv2.HOUGH_GRADIENT, 1, minDist=20, param1=250, param2=10, minRadius=min_radius, maxRadius=max_radius)
+        circle_green = cv2.HoughCircles(frame1[:,:,1], cv2.HOUGH_GRADIENT, 1, minDist=20, param1=250, param2=10, minRadius=min_radius, maxRadius=max_radius)
+        circle_blue = cv2.HoughCircles(frame1[:,:,0], cv2.HOUGH_GRADIENT, 1, minDist=20, param1=250, param2=10, minRadius=min_radius, maxRadius=max_radius)
 
         ysize, xsize, channels = frame.shape
         x0 = (int)(3/self.cmPerPx)
         x1 = (int)(60/self.cmPerPx)
         y0 = (int)(10/self.cmPerPx)
-        y1 = (int)(30/self.cmPerPx)
-        y2 = (int)(80/self.cmPerPx)
-
-        xy_diff = (int)(5/self.cmPerPx)
+        y1 = (int)(20/self.cmPerPx)
+        y2 = (int)(60/self.cmPerPx)
+        print(x0,x1,y0,y1,y2)
+        xy_diff = (int)(10/self.cmPerPx)
 
 
 
@@ -243,7 +244,7 @@ class Bot:
                     if self.pos_r == [-1,-1] and y<y1:
                         self.pos_r[0] = x
                         self.pos_r[1] = y
-                        cv2.circle(frame,(x,y),r*2,(0,0,255),-1)
+                        cv2.circle(frame,(x,y),int(r*2),(0,0,255),-1)
 
                     elif abs(self.pos_r[0]-x)<xy_diff and abs(self.pos_r[1]-y)<xy_diff:
 
@@ -265,7 +266,7 @@ class Bot:
                     if self.pos_g == [-1,-1] and y<y1:
                         self.pos_g[0] = x
                         self.pos_g[1] = y
-                        cv2.circle(frame,(x,y),r*2,(0,255,0),-1)
+                        cv2.circle(frame,(x,y),int(r*2),(0,255,0),-1)
 
                     elif abs(self.pos_g[0]-x)<xy_diff and abs(self.pos_g[1]-y)<xy_diff:
                         
@@ -285,7 +286,7 @@ class Bot:
                     if self.pos_b == [-1,-1] and y<y1:
                         self.pos_b[0] = x
                         self.pos_b[1] = y
-                        cv2.circle(frame,(x,y),r*2,(255,0,0),-1)
+                        cv2.circle(frame,(x,y),int(r*2),(255,0,0),-1)
 
                     elif abs(self.pos_b[0]-x)<xy_diff and abs(self.pos_b[1]-y)<xy_diff:
                         if y<y2:
@@ -298,6 +299,7 @@ class Bot:
 
 
 
+        print([self.pos_r, self.pos_g, self.pos_b])
 
         return [self.pos_r, self.pos_g, self.pos_b]
 
@@ -366,18 +368,18 @@ class Bot:
             else:
                 newPos = xbf
 
-        #ser.write(("g" + str(round(newPos)) + "\n").encode()
+        ser.write(("g" + str(round(newPos)) + "\n").encode())
         self.lastBasketPosition = round(newPos)
         
         # command = "g15"
-        # ser.write((command +"\n").encode())
+        #ser.write((command +"\n").encode())
         return
 
     def run(self):
         self.t = time.perf_counter()  # current frame time
         self.dt = 0 # difference from last frame time
         
-        cv2.namedWindow("video", cv2.WINDOW_NORMAL)
+        cv2.namedWindow("video")#, cv2.WINDOW_NORMAL)
         while self.cap.isOpened():
             success, frame = cap.read()
             # update times
@@ -404,12 +406,12 @@ class Bot:
 
 
 #cap = cv2.VideoCapture(2)
-cap = cv2.VideoCapture("sample.avi")
+cap = cv2.VideoCapture(1)#"sample.avi")
 # 800 x 448 works with 24 fps
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 448)
-# ser = serial.Serial('COM5', 115200, timeout=5)
-ser = None
+ser = serial.Serial('COM5', 115200, timeout=5)
+#ser = None
 
 bot = Bot(cap=cap, ser=ser)
 bot.run()
