@@ -118,11 +118,11 @@ class Bot:
         self.cmPerPx = knownDist/np.linalg.norm(self.scaleVerts[0]-self.scaleVerts[1])
         print("cm per pixel: ", self.cmPerPx)
         
-        ### calibrate basket horizontal offset ###
+        ### calibrate basket horizontal offset and height in px ###
         # move basket to known position
         #ser.write(("g25\n").encode())
-        # user will click on horizontal center of basket
-        print("click on horizontal center of basket")
+        # user will click on top center of basket
+        print("click on top center of basket")
         self.point = []
         cv2.setMouseCallback("Calibration", self.getPoint)
         while self.point == []:
@@ -135,7 +135,9 @@ class Bot:
         # offset = 25/cmPerPx - x
         # offset is also the x pixel value of the basket's 0cm position
         self.basketOffset = 25.0/self.cmPerPx - self.point[0]
+        self.basketHeight = self.point[1]
         print("basket offset = ", self.basketOffset, " px")
+        print("basket height = ", self.basketHeight, " px")
         
         cv2.destroyWindow("Calibration")
         
@@ -178,9 +180,9 @@ class Bot:
     def estimateFinalBallPos(self, currPos):
 
         # use current x positions as final x positions
-        xrf = currPos[0][0] * self.cmPerPx
-        xgf = currPos[1][0] * self.cmPerPx
-        xbf = currPos[2][0] * self.cmPerPx
+        xrf = (currPos[0][0] + self.basketOffset) * self.cmPerPx
+        xgf = (currPos[1][0] + self.basketOffset) * self.cmPerPx
+        xbf = (currPos[2][0] + self.basketOffset) * self.cmPerPx
         # estimate final time based on avg velocity and current y position
         trf = (self.basketYPos - currPos[0][1])/self.avgVel
         tgf = (self.basketYPos - currPos[1][1])/self.avgVel
@@ -218,8 +220,8 @@ class Bot:
                 self.ser.write((command + "\n").encode())
 
 
-cap = cv2.VideoCapture(2)
-#cap = cv2.VideoCapture("sample.avi")
+#cap = cv2.VideoCapture(2)
+cap = cv2.VideoCapture("sample.avi")
 # 800 x 448 works with 24 fps
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 448)
