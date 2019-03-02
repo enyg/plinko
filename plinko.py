@@ -55,15 +55,20 @@ class Bot:
             if self.vertIx >= 4:
                 break
         
-        # get the transformation
-        (tl, tr, br, bl) = self.calibVerts
-        widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
-        widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
-        transW = max(int(widthA), int(widthB))
+        ### get the transformation ###
+        #(tl, tr, br, bl) = self.calibVerts
+        #widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
+        #widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
+        #transW = max(int(widthA), int(widthB))
         
-        heightA = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
-        heightB = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
-        transH = max(int(heightA), int(heightB))
+        #heightA = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
+        #heightB = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
+        #transH = max(int(heightA), int(heightB))
+        
+        # the board is 21" x 32"
+        # these values will give 17 pixels per inch
+        transW = 21*17  #357
+        transH = 32*17  #544
         
         dst = np.array([
             [0, 0],
