@@ -115,8 +115,27 @@ class Bot:
             cv2.waitKey(100)
         
         knownDist = 2.54   # known distance in cm (grid holes are 1" apart)
-        self.cmPerPx = knownDist/np.linalg.norm(self.calibVerts[0]-self.calibVerts[1])
+        self.cmPerPx = knownDist/np.linalg.norm(self.scaleVerts[0]-self.scaleVerts[1])
         print("cm per pixel: ", self.cmPerPx)
+        
+        ### calibrate basket horizontal offset ###
+        # move basket to known position
+        #ser.write(("g25\n").encode())
+        # user will click on horizontal center of basket
+        print("click on horizontal center of basket")
+        self.point = []
+        cv2.setMouseCallback("Calibration", self.getPoint)
+        while self.point == []:
+            _, self.calframe = cap.read()
+            good = self.straighten(self.calframe)
+            cv2.imshow("Calibration",good)
+            cv2.waitKey(30)
+        
+        # (x + offset) * cmPerPx = 25cm
+        # offset = 25/cmPerPx - x
+        # offset is also the x pixel value of the basket's 0cm position
+        self.basketOffset = 25.0/self.cmPerPx - self.point[0]
+        print("basket offset = ", self.basketOffset, " px")
         
         cv2.destroyWindow("Calibration")
         
@@ -199,8 +218,8 @@ class Bot:
                 self.ser.write((command + "\n").encode())
 
 
-cap = cv2.VideoCapture(2)
-#cap = cv2.VideoCapture("sample.avi")
+#cap = cv2.VideoCapture(2)
+cap = cv2.VideoCapture("sample.avi")
 # 800 x 448 works with 24 fps
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 448)
