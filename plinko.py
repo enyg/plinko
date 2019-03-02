@@ -15,7 +15,12 @@ class Bot:
 
         self.ser = ser
         self.home_command = 'h'
-
+        
+        # home basket
+        ser.write((self.home_commmand + "\n").encode())
+        ser.write(("g25\n").encode())
+        self.lastBasketPosition = 25
+        
         # initialize plinko board geometry here
         self.calibrate()
 
@@ -191,6 +196,21 @@ class Bot:
         # this function can move the basket at any time it is called,
         # or it can wait until the balls get close to the bottom, based on ball prediction (final x and time)
         
+        # track red ball until it is past the basket height
+        if trf > 0:
+            newPos = xrf
+        else:
+            if tgf <= 0:
+                newPos = xbf
+            elif tbf <= 0:
+                newPos = xgf
+            elif np.abs(xgf - self.lastBasketPosition) < np.abs(xbf - self.lastBasketPosition):
+                newPos = xgf
+            else
+                newPos = xbf
+
+        #ser.write(("g" + str(round(newPos)) + "\n").encode()
+        self.lastBasketPosition = round(newPos)
         
         # command = "g15"
         # ser.write((command +"\n").encode())
