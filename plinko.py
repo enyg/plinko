@@ -16,9 +16,6 @@ class Bot:
         self.ser = ser
         self.home_command = 'h'
 
-        #self.cmPerPx = 1/20.0  # dummy value - should be calibrated in setupGeometry()
-        self.basketYPos = 60.0  # dummy value - needs to be measured or set in calibration
-
         # initialize plinko board geometry here
         self.calibrate()
 
@@ -135,9 +132,9 @@ class Bot:
         # offset = 25/cmPerPx - x
         # offset is also the x pixel value of the basket's 0cm position
         self.basketOffset = 25.0/self.cmPerPx - self.point[0]
-        self.basketHeight = self.point[1]
+        self.basketYPos = self.point[1]
         print("basket offset = ", self.basketOffset, " px")
-        print("basket height = ", self.basketHeight, " px")
+        print("basket height = ", self.basketYPos, " px")
         
         cv2.destroyWindow("Calibration")
         
@@ -191,9 +188,10 @@ class Bot:
         return [[xrf, trf], [xbf, tbf], [xgf, tgf]]
 
     def controlBasket(self, ballPrediction):
-        # this function can move the ser at any time it is called,
+        # this function can move the basket at any time it is called,
         # or it can wait until the balls get close to the bottom, based on ball prediction (final x and time)
-
+        
+        
         # command = "g15"
         # ser.write((command +"\n").encode())
         return
