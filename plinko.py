@@ -76,6 +76,8 @@ class Bot:
         self.transW = transW
         self.transH = transH
         
+        print("dimensions: ", transW, transH)
+        
         # get cm per px scale
         # base it on known distance between screw holes in center of board
         # user will click 2 points for adjacent holes in the board
@@ -204,7 +206,7 @@ class Bot:
         # draw predicted path on the board image (if draw = True)
         # this part works with pixel values, not centimeters - conversion is only done for the final prediction
         dt = self.dt    # use last delta t as assumption for frame rate
-        drawstart = time.perf_counter()
+        #drawstart = time.perf_counter()
         if draw == True:
             # index 0: r/g/b   index 1: x/y    index 2: time step
             timeSteps = int(max(tfinal)/dt)
@@ -216,8 +218,8 @@ class Bot:
                     paths[ix][1][tix] = currPos[ix][1]+pxPerSec*dt*tix
                 for tix in range(0, int(tfinal[ix]/dt)):                    
                     cv2.circle(img, (paths[ix][0][tix], paths[ix][1][tix]), 4, color, cv2.FILLED)
-        drawend = time.perf_counter()
-        print("drawing: ", drawend-drawstart, " s")
+        #drawend = time.perf_counter()
+        #print("drawing: ", drawend-drawstart, " s")
         
         #return [[xrf, trf], [xgf, tgf], [xbf, tbf]]
         return xfinal, tfinal
