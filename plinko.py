@@ -16,18 +16,15 @@ class Bot:
         self.ser = ser
         self.home_command = 'h'
 
-        self.cmPerPx = 1/20.0  # dummy value - should be calibrated in setupGeometry()
+        #self.cmPerPx = 1/20.0  # dummy value - should be calibrated in setupGeometry()
         self.basketYPos = 60.0  # dummy value - needs to be measured or set in calibration
 
         # initialize plinko board geometry here
         self.calibrate()
-        
-        self.cmPerPx = 3.0  # dummy value
 
         # rough guess for avg velocity in cm/sec - should be measured or estimated from video
         self.avgVel = 3.0
-        
-        
+                
     
     def calibrate(self):
         # (find edges, calculate pixels/cm, and calculate perspective transform, if necessary)
@@ -75,16 +72,53 @@ class Bot:
         self.perspectiveTrans = cv2.getPerspectiveTransform(self.calibVerts, dst)
         self.transW = transW
         self.transH = transH
-        # show the flattened/cropped image
-        good = self.straighten(self.calframe)
-        cv2.imshow("Calibration",good)
-        
-        cv2.waitKey(0)
-        
-        #print(self.calibVerts)
         
         # get cm per px scale
         # base it on known distance between screw holes in center of board
+        # user will click 2 points for adjacent holes in the board
+        
+        # get center for region to do scale calibration with
+        print("click region to use for scale calibration")
+        # show the flattened/cropped image
+        good = self.straighten(self.calframe)
+        self.point = []
+        cv2.setMouseCallback("Calibration", self.getPoint)
+        cv2.imshow("Calibration",good)
+        while self.point == []:
+            cv2.waitKey(30)
+        #cv2.waitKey(0)
+        
+        # show crop of area user chose
+        width = good.shape[1]/3
+        height = good.shape[0]/3
+        cx = self.point[0]
+        cy = self.point[1]
+        x1 = max(0, round(cx - width/2))
+        x2 = min(good.shape[0]-1, round(cx + width/2))
+        y1 = max(0, round(cy - height/2))
+        y2 = min(good.shape[1]-1, round(cy + height/2))
+        #self.center = good[round(good.shape[1]/2 - width/2):round(good.shape[1]/2 + width/2), round(good.shape[0]/2 - height/2):round(good.shape[0]/2 + height/2)]
+        
+        # let user choose points for scale reference
+        print("click on 2 points 1\" apart")
+        self.scaleVerts = np.zeros([2,2], dtype="float32")
+        self.vertIx = 0
+        cv2.setMouseCallback("Calibration", self.getScaleVerts)
+        while self.vertIx < 2:
+            _, good = cap.read()
+            good = self.straighten(good)
+            self.center = good[x1:x2, y1:y2]
+            for pt in self.scaleVerts:
+                if not all(pt == [0,0]):
+                    cv2.circle(self.center, (pt[0],pt[1]), 4, [255,255,0], 1, cv2.LINE_AA)
+            cv2.imshow("Calibration",self.center)
+            cv2.waitKey(100)
+        
+        knownDist = 2.54   # known distance in cm (grid holes are 1" apart)
+        self.cmPerPx = knownDist/np.linalg.norm(self.calibVerts[0]-self.calibVerts[1])
+        print("cm per pixel: ", self.cmPerPx)
+        
+        cv2.destroyWindow("Calibration")
         
         # TODO: calibrate camera and undistort to make the board a true rectangle
     
@@ -93,7 +127,19 @@ class Bot:
             self.calibVerts[self.vertIx] = [x,y]
             self.vertIx = self.vertIx + 1
             print("calibration pt: ", (x,y))
-        
+    
+    def getPoint(self, event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            self.point = [x,y]
+            print((x,y))
+    
+    def getScaleVerts(self, event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            self.scaleVerts[self.vertIx] = [x,y]
+            #cv2.circle(self.center, (x,y), 4, [255,255,0], 1, cv2.LINE_AA)
+            self.vertIx = self.vertIx + 1
+            print("scale pt: ", (x,y))
+
     def straighten(self, frame):
         # return straightened (maybe cropped) image of plinko board, based on initial calibration
         return cv2.warpPerspective(frame, self.perspectiveTrans, (self.transW, self.transH))
@@ -154,6 +200,7 @@ class Bot:
 
 
 cap = cv2.VideoCapture(2)
+#cap = cv2.VideoCapture("sample.avi")
 # 800 x 448 works with 24 fps
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 448)
