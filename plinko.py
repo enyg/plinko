@@ -15,10 +15,12 @@ class Bot:
 
         self.ser = ser
         self.home_command = 'h'
-
-        #self.cmPerPx = 1/20.0  # dummy value - should be calibrated in setupGeometry()
-        self.basketYPos = 60.0  # dummy value - needs to be measured or set in calibration
-
+        
+        # home basket
+        #ser.write((self.home_commmand + "\n").encode())
+        #ser.write(("g25\n").encode())
+        self.lastBasketPosition = 25
+        
         # initialize plinko board geometry here
         self.calibrate()
 
@@ -53,15 +55,20 @@ class Bot:
             if self.vertIx >= 4:
                 break
         
-        # get the transformation
-        (tl, tr, br, bl) = self.calibVerts
-        widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
-        widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
-        transW = max(int(widthA), int(widthB))
+        ### get the transformation ###
+        #(tl, tr, br, bl) = self.calibVerts
+        #widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
+        #widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
+        #transW = max(int(widthA), int(widthB))
         
-        heightA = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
-        heightB = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
-        transH = max(int(heightA), int(heightB))
+        #heightA = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
+        #heightB = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
+        #transH = max(int(heightA), int(heightB))
+        
+        # the board is 21" x 32"
+        # these values will give 17 pixels per inch
+        transW = 21*17  #357
+        transH = 32*17  #544
         
         dst = np.array([
             [0, 0],
@@ -118,11 +125,11 @@ class Bot:
         self.cmPerPx = knownDist/np.linalg.norm(self.scaleVerts[0]-self.scaleVerts[1])
         print("cm per pixel: ", self.cmPerPx)
         
-        ### calibrate basket horizontal offset ###
+        ### calibrate basket horizontal offset and height in px ###
         # move basket to known position
         #ser.write(("g25\n").encode())
-        # user will click on horizontal center of basket
-        print("click on horizontal center of basket")
+        # user will click on top center of basket
+        print("click on top center of basket")
         self.point = []
         cv2.setMouseCallback("Calibration", self.getPoint)
         while self.point == []:
@@ -135,7 +142,9 @@ class Bot:
         # offset = 25/cmPerPx - x
         # offset is also the x pixel value of the basket's 0cm position
         self.basketOffset = 25.0/self.cmPerPx - self.point[0]
+        self.basketYPos = self.point[1]
         print("basket offset = ", self.basketOffset, " px")
+        print("basket height = ", self.basketYPos, " px")
         
         cv2.destroyWindow("Calibration")
         
@@ -175,23 +184,50 @@ class Bot:
 
     # estimate the final horizontal position and time to reach the basket height (for each ball)
     # return a value in cm for position
+    # this function translates from pixel values to cm on the basket's coordinate system
     def estimateFinalBallPos(self, currPos):
+        [[xr, yr], [xg, yg], [xb, yb]] = currPos
+        xfinal = [-1, -1, -1]
+        tfinal = [-1, -1, -1]
+        
+        for ix in range(0,3):
+            if currPos[ix][0] < 0:
+                # this ball is not present (negative position in px).
+                # Passing -1 as predictions will indicate to control function
+                # that this ball is not on the board anymore.
+                xfinal[ix] = -1
+                tfinal[ix] = -1
+            else:
+                # final x position is just set to current position (transformed)
+                xfinal[ix] = (currPos[ix][0] + self.basketOffset) * self.cmPerPx
+                # estimate final time based on avg velocity and current y position
+                tfinal[ix] = (self.basketYPos - currPos[ix][1])/self.avgVel
 
-        # use current x positions as final x positions
-        xrf = currPos[0][0] * self.cmPerPx
-        xgf = currPos[1][0] * self.cmPerPx
-        xbf = currPos[2][0] * self.cmPerPx
-        # estimate final time based on avg velocity and current y position
-        trf = (self.basketYPos - currPos[0][1])/self.avgVel
-        tgf = (self.basketYPos - currPos[1][1])/self.avgVel
-        tbf = (self.basketYPos - currPos[2][1])/self.avgVel
+        #return [[xrf, trf], [xgf, tgf], [xbf, tbf]]
+        return xfinal, tfinal
 
-        return [[xrf, trf], [xbf, tbf], [xgf, tgf]]
-
-    def controlBasket(self, ballPrediction):
-        # this function can move the ser at any time it is called,
+    def controlBasket(self, xfinal, tfinal):
+        # this function can move the basket at any time it is called,
         # or it can wait until the balls get close to the bottom, based on ball prediction (final x and time)
+        [xrf, xgf, xbf] = xfinal
+        [trf, tgf, tbf] = tfinal
+        
+        # track red ball until it is past the basket height
+        if trf > 0:
+            newPos = xrf
+        else:
+            if tgf <= 0:
+                newPos = xbf
+            elif tbf <= 0:
+                newPos = xgf
+            elif np.abs(xgf - self.lastBasketPosition) < np.abs(xbf - self.lastBasketPosition):
+                newPos = xgf
+            else:
+                newPos = xbf
 
+        #ser.write(("g" + str(round(newPos)) + "\n").encode()
+        self.lastBasketPosition = round(newPos)
+        
         # command = "g15"
         # ser.write((command +"\n").encode())
         return
@@ -206,8 +242,8 @@ class Bot:
             board = self.straighten(frame)
             cv2.imshow("video", board)
             ballPos = self.getCurrentBallPos(board)
-            ballPrediction = self.estimateFinalBallPos(ballPos)
-            self.controlBasket(ballPrediction)
+            xfinal, tfinal = self.estimateFinalBallPos(ballPos)
+            self.controlBasket(xfinal, tfinal)
 
             key = cv2.waitKey(10) & 0xFF
 
