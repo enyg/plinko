@@ -239,8 +239,8 @@ class Bot:
                 self.ser.write((command + "\n").encode())
 
 
-#cap = cv2.VideoCapture(2)
-cap = cv2.VideoCapture("sample.avi")
+cap = cv2.VideoCapture(2)
+#cap = cv2.VideoCapture("sample.avi")
 # 800 x 448 works with 24 fps
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 448)
