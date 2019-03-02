@@ -222,10 +222,11 @@ class Bot:
         #return [[xrf, trf], [xgf, tgf], [xbf, tbf]]
         return xfinal, tfinal
 
-    def controlBasket(self, ballPrediction):
+    def controlBasket(self, xfinal, tfinal):
         # this function can move the basket at any time it is called,
         # or it can wait until the balls get close to the bottom, based on ball prediction (final x and time)
-        [[xrf, trf], [xbf, tbf], [xgf, tgf]] = ballPrediction        
+        [xrf, xgf, xbf] = xfinal
+        [trf, tgf, tbf] = tfinal
         
         # track red ball until it is past the basket height
         if trf > 0:
@@ -264,9 +265,9 @@ class Bot:
             board = self.straighten(frame)
             #cv2.imshow("video", board)
             ballPos = self.getCurrentBallPos(board)
-            ballPrediction = self.estimateFinalBallPos(ballPos, board, draw=True)
+            xfinal, tfinal = self.estimateFinalBallPos(ballPos, board, draw=True)
             cv2.imshow("video", board)
-            self.controlBasket(ballPrediction)
+            self.controlBasket(xfinal, tfinal)
 
             key = cv2.waitKey(10) & 0xFF
 
