@@ -190,17 +190,19 @@ class Bot:
         blue_cond = ((h>=105)*(h<=135))*(s>100)* (v > 50)* (v < 200)
         else_cond = ~(red_cond + green_cond+ blue_cond)
 
-        frame[red_cond] = [0,0,255] # red 
-        frame[green_cond] = [0,255,0] # green
-        frame[blue_cond] = [255,0,0] # blue
-        frame[else_cond] = [0,0,0]
+        frame1 = frame.copy()
+
+        frame1[red_cond] = [0,0,255] # red 
+        frame1[green_cond] = [0,255,0] # green
+        frame1[blue_cond] = [255,0,0] # blue
+        frame1[else_cond] = [0,0,0]
 
         min_radius = int((self.ball_radius/self.cmPerPx)*0.75)
         max_radius = int((self.ball_radius/self.cmPerPx)*1.25)
 
-        circle_red = cv2.HoughCircles(frame[:,:,2], cv2.HOUGH_GRADIENT, 1, minDist=20, param1=250, param2=8, minRadius=min_radius, maxRadius=max_radius)
-        circle_green = cv2.HoughCircles(frame[:,:,1], cv2.HOUGH_GRADIENT, 1, minDist=20, param1=250, param2=8, minRadius=min_radius, maxRadius=max_radius)
-        circle_blue = cv2.HoughCircles(frame[:,:,0], cv2.HOUGH_GRADIENT, 1, minDist=20, param1=250, param2=8, minRadius=min_radius, maxRadius=max_radius)
+        circle_red = cv2.HoughCircles(frame1[:,:,2], cv2.HOUGH_GRADIENT, 1, minDist=20, param1=250, param2=8, minRadius=min_radius, maxRadius=max_radius)
+        circle_green = cv2.HoughCircles(frame1[:,:,1], cv2.HOUGH_GRADIENT, 1, minDist=20, param1=250, param2=8, minRadius=min_radius, maxRadius=max_radius)
+        circle_blue = cv2.HoughCircles(frame1[:,:,0], cv2.HOUGH_GRADIENT, 1, minDist=20, param1=250, param2=8, minRadius=min_radius, maxRadius=max_radius)
 
         ysize, xsize, channels = frame.shape
         x0 = (int)(3/self.cmPerPx)
@@ -211,44 +213,68 @@ class Bot:
 
         xy_diff = (int)(5/self.cmPerPx)
 
+
+
         if circle_red is not None:
             for x,y,r in circle_red[0,:]:
 
-                if x0<x<x1 and y0<y<y2:
+                if x0<x<x1 and y0<y:
 
                     if self.pos_r == [-1,-1] and y<y1:
                         self.pos_r[0] = x
                         self.pos_r[1] = y
+                        cv2.circle(frame,(x,y),r*2,(0,0,255),-1)
 
                     elif abs(self.pos_r[0]-x)<xy_diff and abs(self.pos_r[1]-y)<xy_diff:
-                        self.pos_r[0] = x
-                        self.pos_r[1] = y
+
+                        if y<y2:
+                            self.pos_r[0] = x
+                            self.pos_r[1] = y
+                        else:
+                            self.pos_r[0] = -1
+                            self.pos_r[1] = -1
+                    break
+
+
 
         if circle_green is not None:
             for x,y,r in circle_green[0,:]:
 
-                if x0<x<x1 and y0<y<y2:
+                if x0<x<x1 and y0<y:
 
                     if self.pos_g == [-1,-1] and y<y1:
                         self.pos_g[0] = x
                         self.pos_g[1] = y
+                        cv2.circle(frame,(x,y),r*2,(0,255,0),-1)
 
                     elif abs(self.pos_g[0]-x)<xy_diff and abs(self.pos_g[1]-y)<xy_diff:
-                        self.pos_g[0] = x
-                        self.pos_g[1] = y
+                        
+                        if y<y2:
+                            self.pos_g[0] = x
+                            self.pos_g[1] = y
+                        else:
+                            self.pos_g[0] = -1
+                            self.pos_g[1] = -1
+                    break
 
         if circle_blue is not None:
             for x,y,r in circle_blue[0,:]:
 
-                if x0<x<x1 and y0<y<y2:
+                if x0<x<x1 and y0<y:
 
                     if self.pos_b == [-1,-1] and y<y1:
                         self.pos_b[0] = x
                         self.pos_b[1] = y
+                        cv2.circle(frame,(x,y),r*2,(255,0,0),-1)
 
                     elif abs(self.pos_b[0]-x)<xy_diff and abs(self.pos_b[1]-y)<xy_diff:
-                        self.pos_b[0] = x
-                        self.pos_b[1] = y
+                        if y<y2:
+                            self.pos_b[0] = x
+                            self.pos_b[1] = y
+                        else:
+                            self.pos_b[0] = -1
+                            self.pos_b[1] = -1
+                    break
 
 
 
@@ -285,14 +311,16 @@ class Bot:
         if draw == True:
             # index 0: r/g/b   index 1: x/y    index 2: time step
             timeSteps = int(max(tfinal)/dt)
-            paths = np.zeros([3, 2, timeSteps], dtype="float32")
-            for ix in range(0,3):
-                color = (255*(ix==2), 255*(ix==1), 255*(ix==0))
-                paths[ix][0][:] = np.ones([timeSteps])*currPos[ix][0]
-                for tix in range(0, int(tfinal[ix]/dt)):
-                    paths[ix][1][tix] = currPos[ix][1]+pxPerSec*dt*tix
-                for tix in range(0, int(tfinal[ix]/dt)):                    
-                    cv2.circle(img, (paths[ix][0][tix], paths[ix][1][tix]), 4, color, cv2.FILLED)
+            if timeSteps > 0:
+                paths = np.zeros([3, 2, timeSteps], dtype="float32")
+                for ix in range(0,3):
+                    if tfinal[ix] >= 0:
+                        color = (255*(ix==2), 255*(ix==1), 255*(ix==0))
+                        paths[ix][0][:] = np.ones([timeSteps])*currPos[ix][0]
+                        for tix in range(0, int(tfinal[ix]/dt)):
+                            paths[ix][1][tix] = currPos[ix][1]+pxPerSec*dt*tix
+                        for tix in range(0, int(tfinal[ix]/dt)):                    
+                            cv2.circle(img, (paths[ix][0][tix], paths[ix][1][tix]), 4, color, cv2.FILLED)
         #drawend = time.perf_counter()
         #print("drawing: ", drawend-drawstart, " s")
         
