@@ -26,11 +26,31 @@ class Bot:
         self.lastBasketPosition = 25
         
         # initialize plinko board geometry here
-        self.calibrate()
+        self.calibrateLazy()
 
         # rough guess for avg velocity in cm/sec - should be measured or estimated from video
         self.avgVel = 3.0
-                
+
+    # set some guessed calibration values 
+    # (for testing purposes when you don't want to do a full calibration)
+    def calibrateLazy(self):
+        self.calibVerts = np.array([[4,1],[356,3],[354,525],[3,520]], dtype="float32")
+        transW = 21*17  #357
+        transH = 32*17  #544
+        dst = np.array([
+            [0, 0],
+            [transW - 1, 0],
+            [transW - 1, transH - 1],
+            [0, transH - 1]], dtype = "float32")
+        
+        self.perspectiveTrans = cv2.getPerspectiveTransform(self.calibVerts, dst)
+        self.transW = transW
+        self.transH = transH
+        
+        self.cmPerPx = 0.149
+        self.basketOffset = -3.677
+        self.basketYPos = 525
+        
     
     def calibrate(self):
         # (find edges, calculate pixels/cm, and calculate perspective transform, if necessary)
