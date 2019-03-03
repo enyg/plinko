@@ -19,6 +19,7 @@ class Bot:
         self.pos_r = [-1,-1]  # dummy values
         self.pos_g = [-1,-1]
         self.pos_b = [-1,-1]
+        self.found = [False,False,False]
         self.ball_radius = 0.75 * 2.54 # ball radius in cms        
         # home basket
         ser.write(('h'+ "\n").encode())
@@ -29,12 +30,13 @@ class Bot:
         self.calibrate()
 
         # rough guess for avg velocity in cm/sec - should be measured or estimated from video
-        self.avgVel = 3.0
+        self.avgVel = 11.0
 
     # set some guessed calibration values 
     # (for testing purposes when you don't want to do a full calibration)
     def calibrateLazy(self):
-        self.calibVerts = np.array([[4,1],[356,3],[354,525],[3,520]], dtype="float32")
+        #self.calibVerts = np.array([[4,1],[356,3],[354,525],[3,520]], dtype="float32")
+        self.calibVerts = np.array([[716,51],[711,415],[164,392],[179,38]], dtype="float32")
         transW = 21*17  #357
         transH = 32*17  #544
         dst = np.array([
@@ -47,10 +49,13 @@ class Bot:
         self.transW = transW
         self.transH = transH
         
-        self.cmPerPx = 0.149
-        self.basketOffset = -3.677
-        self.basketYPos = 525
+        #self.cmPerPx = 0.149
+        #self.basketOffset = -3.677
+        #self.basketYPos = 525
         
+        self.cmPerPx = 0.1411
+        self.basketOffset = 30.165
+        self.basketYPos = 527
     
     def calibrate(self):
         # (find edges, calculate pixels/cm, and calculate perspective transform, if necessary)
@@ -107,49 +112,52 @@ class Bot:
         
         print("dimensions: ", transW, transH)
         
-        # get cm per px scale
+        ### get cm per px scale ###
         # base it on known distance between screw holes in center of board
         # user will click 2 points for adjacent holes in the board
         
         # get center for region to do scale calibration with
-        print("click region to use for scale calibration")
+        #print("click region to use for scale calibration")
         # show the flattened/cropped image
         good = self.straighten(self.calframe)
-        self.point = []
-        cv2.setMouseCallback("Calibration", self.getPoint)
-        cv2.imshow("Calibration",good)
-        while self.point == []:
-            cv2.waitKey(30)
+        #self.point = []
+        #cv2.setMouseCallback("Calibration", self.getPoint)
+        #cv2.imshow("Calibration",good)
+        #while self.point == []:
+        #    cv2.waitKey(30)
         #cv2.waitKey(0)
         
         # show crop of area user chose
-        width = good.shape[1]/3
-        height = good.shape[0]/3
-        cx = self.point[0]
-        cy = self.point[1]
-        x1 = max(0, round(cx - width/2))
-        x2 = min(good.shape[0]-1, round(cx + width/2))
-        y1 = max(0, round(cy - height/2))
-        y2 = min(good.shape[1]-1, round(cy + height/2))
+        #width = good.shape[0]/3
+        #height = good.shape[1]/3
+        #cx = self.point[0]
+        #cy = self.point[1]
+        #x1 = max(0, round(cx - width/2))
+        #x2 = min(good.shape[0]-1, round(cx + width/2))
+        #y1 = max(0, round(cy - height/2))
+        #y2 = min(good.shape[1]-1, round(cy + height/2))
         #self.center = good[round(good.shape[1]/2 - width/2):round(good.shape[1]/2 + width/2), round(good.shape[0]/2 - height/2):round(good.shape[0]/2 + height/2)]
+        #print(cx, cy, good.shape)
+        #print(x1, x2, "\n", y1, y2)
         
         # let user choose points for scale reference
-        print("click on 2 points 1\" apart")
-        self.scaleVerts = np.zeros([2,2], dtype="float32")
-        self.vertIx = 0
-        cv2.setMouseCallback("Calibration", self.getScaleVerts)
-        while self.vertIx < 2:
-            _, good = cap.read()
-            good = self.straighten(good)
-            self.center = good[x1:x2, y1:y2]
-            for pt in self.scaleVerts:
-                if not all(pt == [0,0]):
-                    cv2.circle(self.center, (pt[0],pt[1]), 4, [255,255,0], 1, cv2.LINE_AA)
-            cv2.imshow("Calibration",self.center)
-            cv2.waitKey(100)
+        #print("click on 2 points 1\" apart")
+        #self.scaleVerts = np.zeros([2,2], dtype="float32")
+        #self.vertIx = 0
+        #cv2.setMouseCallback("Calibration", self.getScaleVerts)
+        #while self.vertIx < 2:
+        #    _, good = cap.read()
+        #    good = self.straighten(good)
+        #    self.center = good[x1:x2, y1:y2]            
+        #    for pt in self.scaleVerts:
+        #        if not all(pt == [0,0]):
+        #            cv2.circle(self.center, (pt[0],pt[1]), 4, [255,255,0], 1, cv2.LINE_AA)
+        #    cv2.imshow("Calibration",self.center)
+        #    cv2.waitKey(100)
         
-        knownDist = 2.54   # known distance in cm (grid holes are 1" apart)
-        self.cmPerPx = knownDist/np.linalg.norm(self.scaleVerts[0]-self.scaleVerts[1])
+        #knownDist = 2.54   # known distance in cm (grid holes are 1" apart)
+        #self.cmPerPx = knownDist/np.linalg.norm(self.scaleVerts[0]-self.scaleVerts[1])
+        self.cmPerPx = 21*2.54/good.shape[1]
         print("cm per pixel: ", self.cmPerPx)
         
         ### calibrate basket horizontal offset and height in px ###
@@ -199,16 +207,16 @@ class Bot:
         # return straightened (maybe cropped) image of plinko board, based on initial calibration
         return cv2.warpPerspective(frame, self.perspectiveTrans, (self.transW, self.transH))
 
-    def getCurrentBallPos(self, frame):
+    def getCurrentBallPos(self, frame):            
         # calculate x and y position in pixels for each ball (R,G,B)
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         h = hsv[:,:,0]
         s = hsv[:,:,1]
         v = hsv[:,:,2]
 
-        red_cond = ((h>=165)+(h<=15))*(s>100)* (v > 50)* (v < 200)
-        green_cond = ((h>=45)*(h<=75))*(s>100)* (v > 50) * (v < 200)
-        blue_cond = ((h>=105)*(h<=135))*(s>100)* (v > 50)* (v < 200)
+        red_cond = ((h>=165)+(h<=15))*(s>80)* (v > 80)* (v < 215)
+        green_cond = ((h>=45)*(h<=75))*(s>100)* (v > 80) * (v < 215)
+        blue_cond = ((h>=105)*(h<=135))*(s>100)* (v > 80)* (v < 215)
         else_cond = ~(red_cond + green_cond+ blue_cond)
 
         frame1 = frame.copy()
@@ -226,31 +234,33 @@ class Bot:
         circle_blue = cv2.HoughCircles(frame1[:,:,0], cv2.HOUGH_GRADIENT, 1, minDist=20, param1=250, param2=10, minRadius=min_radius, maxRadius=max_radius)
 
         ysize, xsize, channels = frame.shape
-        x0 = (int)(3/self.cmPerPx)
-        x1 = (int)(60/self.cmPerPx)
+        x0 = (int)(2/self.cmPerPx)
+        x1 = (int)(65/self.cmPerPx)
         y0 = (int)(10/self.cmPerPx)
-        y1 = (int)(20/self.cmPerPx)
-        y2 = (int)(60/self.cmPerPx)
-        print(x0,x1,y0,y1,y2)
-        xy_diff = (int)(10/self.cmPerPx)
+        y1 = (int)(25/self.cmPerPx)
+        y2 = (int)(75/self.cmPerPx)
+        #print(x0,x1,y0,y1,y2)
+        xy_diff = (int)(15/self.cmPerPx)
 
-
+        self.found = [False,False,False]
 
         if circle_red is not None:
             for x,y,r in circle_red[0,:]:
 
                 if x0<x<x1 and y0<y:
-
+                    
                     if self.pos_r == [-1,-1] and y<y1:
                         self.pos_r[0] = x
                         self.pos_r[1] = y
-                        cv2.circle(frame,(x,y),int(r*2),(0,0,255),-1)
+                        self.found[0] = True
+                        #cv2.circle(frame1,(x,y),int(r*2),(0,0,255),-1)
 
-                    elif abs(self.pos_r[0]-x)<xy_diff and abs(self.pos_r[1]-y)<xy_diff:
+                    elif abs(self.pos_r[0]-x)<xy_diff and -10<(y-self.pos_r[1])<xy_diff:
 
                         if y<y2:
                             self.pos_r[0] = x
                             self.pos_r[1] = y
+                            self.found[0] = True
                         else:
                             self.pos_r[0] = -1
                             self.pos_r[1] = -1
@@ -266,13 +276,15 @@ class Bot:
                     if self.pos_g == [-1,-1] and y<y1:
                         self.pos_g[0] = x
                         self.pos_g[1] = y
-                        cv2.circle(frame,(x,y),int(r*2),(0,255,0),-1)
+                        self.found[1] = True
+                        #cv2.circle(frame1,(x,y),int(r*2),(0,255,0),-1)
 
-                    elif abs(self.pos_g[0]-x)<xy_diff and abs(self.pos_g[1]-y)<xy_diff:
+                    elif abs(self.pos_g[0]-x)<xy_diff and -10<(y-self.pos_g[1])<xy_diff:
                         
                         if y<y2:
                             self.pos_g[0] = x
                             self.pos_g[1] = y
+                            self.found[1] = True
                         else:
                             self.pos_g[0] = -1
                             self.pos_g[1] = -1
@@ -286,20 +298,22 @@ class Bot:
                     if self.pos_b == [-1,-1] and y<y1:
                         self.pos_b[0] = x
                         self.pos_b[1] = y
-                        cv2.circle(frame,(x,y),int(r*2),(255,0,0),-1)
+                        self.found[2] = True
+                        #cv2.circle(frame1,(x,y),int(r*2),(255,0,0),-1)
 
-                    elif abs(self.pos_b[0]-x)<xy_diff and abs(self.pos_b[1]-y)<xy_diff:
+                    elif abs(self.pos_b[0]-x)<xy_diff and -10<(y-self.pos_b[1])<xy_diff:
                         if y<y2:
                             self.pos_b[0] = x
                             self.pos_b[1] = y
+                            self.found[2] = True
                         else:
                             self.pos_b[0] = -1
                             self.pos_b[1] = -1
                     break
 
 
-
-        print([self.pos_r, self.pos_g, self.pos_b])
+        cv2.imshow('circles detected', frame1)
+        #print([self.pos_r, self.pos_g, self.pos_b])
 
         return [self.pos_r, self.pos_g, self.pos_b]
 
@@ -307,13 +321,34 @@ class Bot:
     # return a value in cm for position
     # this function translates from pixel values to cm on the basket's coordinate system
     def estimateFinalBallPos(self, currPos, img, draw):
-        [[xr, yr], [xg, yg], [xb, yb]] = currPos
         xfinal = [-1, -1, -1]
         tfinal = [-1, -1, -1]
         
         pxPerSec = self.avgVel / self.cmPerPx
         
         for ix in range(0,3):
+            if self.found[ix] == False:
+                if ix == 0 and self.pos_r[1] != -1:
+                    self.pos_r[1] = self.pos_r[1] + pxPerSec * self.dt
+                elif ix == 1 and self.pos_g[1] != -1:
+                    self.pos_g[1] = self.pos_g[1] + pxPerSec * self.dt
+                elif ix == 2 and self.pos_b[1] != -1:
+                    self.pos_b[1] = self.pos_b[1] + pxPerSec * self.dt
+        
+        print("red: ", self.pos_r, self.found[0], self.dt, "s")
+        
+        [[xr, yr], [xg, yg], [xb, yb]] = [self.pos_r, self.pos_g, self.pos_b]   #currPos
+        
+        for ix in range(0,3):
+            # set ball pos to -1 if past basket
+            if currPos[ix][1] > self.basketYPos:
+                if ix ==0:
+                    self.pos_r = [-1,-1]
+                elif ix == 1:    
+                    self.pos_g = [-1,-1]
+                elif ix == 2:
+                    self.pos_b = [-1,-1]
+            
             if currPos[ix][0] < 0:
                 # this ball is not present (negative position in px).
                 # Passing -1 as predictions will indicate to control function
@@ -367,9 +402,11 @@ class Bot:
                 newPos = xgf
             else:
                 newPos = xbf
-
-        ser.write(("g" + str(round(newPos)) + "\n").encode())
-        self.lastBasketPosition = round(newPos)
+        
+        if newPos > 0:
+            #print("basket: ", int(round(newPos)), " cm")
+            ser.write(("g" + str(int(round(newPos))) + "\n").encode())
+            self.lastBasketPosition = round(newPos)
         
         # command = "g15"
         #ser.write((command +"\n").encode())
@@ -403,14 +440,21 @@ class Bot:
             elif key == ord('i'):
                 command = input("Enter Command")
                 self.ser.write((command + "\n").encode())
+            elif key == ord('s'):
+                # manually reset ball states to all not present
+                self.pos_r = [-1,-1]  
+                self.pos_g = [-1,-1]
+                self.pos_b = [-1,-1]
 
-
-#cap = cv2.VideoCapture(2)
-cap = cv2.VideoCapture(1)#"sample.avi")
+ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=5)
+cap = cv2.VideoCapture(2)
+#cap = cv2.VideoCapture(1)#"sample.avi")
 # 800 x 448 works with 24 fps
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 448)
-ser = serial.Serial('COM5', 115200, timeout=5)
+
+time.sleep(2)
+
 #ser = None
 
 bot = Bot(cap=cap, ser=ser)
