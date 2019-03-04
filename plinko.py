@@ -32,6 +32,16 @@ class Bot:
         # rough guess for avg velocity in cm/sec - should be measured or estimated from video
         self.avgVel = 11.0
 
+        self.basket_velocity = 36    # 25 cm/sec
+        # Red (5 points), Green (4 points), and Blue (3 points)
+        self.scores = np.array([5, 4, 3])
+
+        self.combination = np.zeros((8, 3), dtype=np.int)
+        for i in range(3):
+            self.combination[i+1, i] = 1
+            self.combination[i+4, i] = 1
+        self.combination[4:, :] = 1 - self.combination[4:, :]
+
     # set some guessed calibration values 
     # (for testing purposes when you don't want to do a full calibration)
     def calibrateLazy(self):
@@ -198,7 +208,7 @@ class Bot:
     
     def getScaleVerts(self, event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONDOWN:
-            self.scaleVerts[self.vertIx] = [x,y]
+            # self.scaleVerts[self.vertIx] = [x,y]
             #cv2.circle(self.center, (x,y), 4, [255,255,0], 1, cv2.LINE_AA)
             self.vertIx = self.vertIx + 1
             print("scale pt: ", (x,y))
@@ -387,22 +397,63 @@ class Bot:
     def controlBasket(self, xfinal, tfinal):
         # this function can move the basket at any time it is called,
         # or it can wait until the balls get close to the bottom, based on ball prediction (final x and time)
-        [xrf, xgf, xbf] = xfinal
-        [trf, tgf, tbf] = tfinal
-        
-        # track red ball until it is past the basket height
-        if trf > 0:
-            newPos = xrf
-        else:
-            if tgf <= 0:
-                newPos = xbf
-            elif tbf <= 0:
-                newPos = xgf
-            elif np.abs(xgf - self.lastBasketPosition) < np.abs(xbf - self.lastBasketPosition):
-                newPos = xgf
-            else:
-                newPos = xbf
-        
+        xfinal = np.array(xfinal)
+        tfinal = np.array(tfinal)
+
+        scores_sorted = np.empty_like(self.scores)
+
+
+        # start processing
+        access = np.ones(8)
+
+        dt_move = np.zeros((3, 3))
+        dt_fall = np.zeros((3, 3))
+
+        idx_sorted = np.argsort(tfinal)
+        for i in range(3):
+            scores_sorted[i] = self.scores[idx_sorted[i]]
+            for j in range(3):
+                if i == j:
+                    break
+                dt_move[i, j] = np.abs(xfinal[idx_sorted[i]] - xfinal[idx_sorted[j]])
+                dt_move[j, i] = dt_move[i, j]
+                dt_fall[i, j] = np.abs(tfinal[idx_sorted[i]] - tfinal[idx_sorted[j]])
+                dt_fall[j, i] = dt_fall[i, j]
+
+        scoreboard = self.combination * scores_sorted
+        scoreboard = scoreboard.sum(axis=1)
+        dt_move /= self.basket_velocity
+
+        # compare time interval
+        enough_time = (dt_move <= dt_fall)
+
+        # block impossible combinations
+        if not enough_time[0, 1]:
+            access[6] = 0
+            access[7] = 0
+        if not enough_time[1, 2]:
+            access[4] = 0
+            access[7] = 0
+        if not enough_time[0, 2]:
+            access[5] = 0
+
+        # choose best strategy from possible combinations
+        combination_verified = self.combination[access > 0]
+        scoreboard_verified = scoreboard[access > 0]
+        idx_max_score = scoreboard_verified.argmax()
+        decision = combination_verified[idx_max_score]
+
+        # show the strategy
+        _map = {0: "Unselect", 1: "Select"}
+        print("1st ball: {}\n2nd ball: {}\n3rd ball: {}".format(
+            _map[decision[0]], _map[decision[1]], _map[decision[2]]))
+
+        for i in range(3):
+            if tfinal[idx_sorted[i]] > 0:
+                if decision[i] != 0:
+                    newPos = xfinal[idx_sorted[i]]
+                    break
+
         if newPos > 0:
             #print("basket: ", int(round(newPos)), " cm")
             ser.write(("g" + str(int(round(newPos))) + "\n").encode())
