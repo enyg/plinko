@@ -452,12 +452,10 @@ class Bot:
             if tfinal[idx_sorted[i]] > 0:
                 if decision[i] != 0:
                     newPos = xfinal[idx_sorted[i]]
+                    #print("basket: ", int(round(newPos)), " cm")
+                    ser.write(("g" + str(int(round(newPos))) + "\n").encode())
+                    self.lastBasketPosition = round(newPos)
                     break
-
-        if newPos > 0:
-            #print("basket: ", int(round(newPos)), " cm")
-            ser.write(("g" + str(int(round(newPos))) + "\n").encode())
-            self.lastBasketPosition = round(newPos)
         
         # command = "g15"
         #ser.write((command +"\n").encode())
@@ -498,7 +496,7 @@ class Bot:
                 self.pos_b = [-1,-1]
 
 ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=5)
-cap = cv2.VideoCapture(2)
+cap = cv2.VideoCapture(0)
 #cap = cv2.VideoCapture(1)#"sample.avi")
 # 800 x 448 works with 24 fps
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
