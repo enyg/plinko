@@ -27,7 +27,7 @@ class Bot:
         self.lastBasketPosition = 25
         
         # initialize plinko board geometry here
-        self.calibrate()
+        self.calibrateLazy()
 
         # rough guess for avg velocity in cm/sec - should be measured or estimated from video
         self.avgVel = 11.0
@@ -36,7 +36,7 @@ class Bot:
     # (for testing purposes when you don't want to do a full calibration)
     def calibrateLazy(self):
         #self.calibVerts = np.array([[4,1],[356,3],[354,525],[3,520]], dtype="float32")
-        self.calibVerts = np.array([[716,51],[711,415],[164,392],[179,38]], dtype="float32")
+        self.calibVerts = np.array([[706,104],[707,411],[209,419],[237,21]], dtype="float32")
         transW = 21*17  #357
         transH = 32*17  #544
         dst = np.array([
@@ -53,9 +53,9 @@ class Bot:
         #self.basketOffset = -3.677
         #self.basketYPos = 525
         
-        self.cmPerPx = 0.1411
-        self.basketOffset = 30.165
-        self.basketYPos = 527
+        self.cmPerPx = 0.1494
+        self.basketOffset = 22.32
+        self.basketYPos = 515
     
     def calibrate(self):
         # (find edges, calculate pixels/cm, and calculate perspective transform, if necessary)
@@ -325,17 +325,28 @@ class Bot:
         tfinal = [-1, -1, -1]
         
         pxPerSec = self.avgVel / self.cmPerPx
+        dt = self.dt    # use last delta t as assumption for frame rate
+        yFree = self.basketYPos - 14/self.cmPerPx
         
         for ix in range(0,3):
             if self.found[ix] == False:
                 if ix == 0 and self.pos_r[1] != -1:
-                    self.pos_r[1] = self.pos_r[1] + pxPerSec * self.dt
+                    if self.pos_r[1] > yFree:
+                        self.pos_r[1] = self.pos_r[1] + dt * np.sqrt(2*980*(self.pos_r[1] - yFree))
+                    else:
+                        self.pos_r[1] = self.pos_r[1] + pxPerSec * self.dt
                 elif ix == 1 and self.pos_g[1] != -1:
-                    self.pos_g[1] = self.pos_g[1] + pxPerSec * self.dt
+                    if self.pos_g[1] > yFree:
+                        self.pos_g[1] = self.pos_g[1] + dt * np.sqrt(2*980*(self.pos_g[1] - yFree))
+                    else:
+                        self.pos_g[1] = self.pos_g[1] + pxPerSec * self.dt
                 elif ix == 2 and self.pos_b[1] != -1:
-                    self.pos_b[1] = self.pos_b[1] + pxPerSec * self.dt
+                    if self.pos_b[1] > yFree:
+                        self.pos_b[1] = self.pos_b[1] + dt * np.sqrt(2*980*(self.pos_b[1] - yFree))
+                    else:
+                        self.pos_b[1] = self.pos_b[1] + pxPerSec * self.dt
         
-        print("red: ", self.pos_r, self.found[0], self.dt, "s")
+        #print("red: ", self.pos_r, self.found[0], self.dt, "s")
         
         [[xr, yr], [xg, yg], [xb, yb]] = [self.pos_r, self.pos_g, self.pos_b]   #currPos
         
@@ -363,7 +374,7 @@ class Bot:
         
         # draw predicted path on the board image (if draw = True)
         # this part works with pixel values, not centimeters - conversion is only done for the final prediction
-        dt = self.dt    # use last delta t as assumption for frame rate
+        
         #drawstart = time.perf_counter()
         if draw == True:
             # index 0: r/g/b   index 1: x/y    index 2: time step
@@ -447,7 +458,7 @@ class Bot:
                 self.pos_b = [-1,-1]
 
 ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=5)
-cap = cv2.VideoCapture(2)
+cap = cv2.VideoCapture(0)
 #cap = cv2.VideoCapture(1)#"sample.avi")
 # 800 x 448 works with 24 fps
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
